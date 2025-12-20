@@ -2271,7 +2271,7 @@ $.widget("sv.plot_bargraph", $.sv.plot_echarts, {
     initSelector: 'div[data-widget="plot.bargraph"]',
 
     options: {
-        label: '',
+        xlabel: '',
         color: '',
 		ymin: '',
 		ymax: '',
@@ -2279,6 +2279,8 @@ $.widget("sv.plot_bargraph", $.sv.plot_echarts, {
         text: '',
         mode: '',
 		unit: '',
+		datalabel: 'off',
+		datalabelcolor: '',
 		chartOptions: null
     },
 
@@ -2288,7 +2290,7 @@ $.widget("sv.plot_bargraph", $.sv.plot_echarts, {
 		var rules = window.getComputedStyle(document.body);
         var ymin = this.options.ymin || null;
         var ymax = this.options.ymax || null;
-        var labels = String(this.options.label).explode();
+        var xlabels = String(this.options.xlabel).explode();
         var color = String(this.options.color).explode();
         var axisName = this.options.yaxis;
         var mode = this.options.mode;
@@ -2297,7 +2299,6 @@ $.widget("sv.plot_bargraph", $.sv.plot_echarts, {
         var color = [];
         if (this.options.color) 
 			color = String(this.options.color).explode();
-
 
         var chartTitle = this.options.text;
 		var valueAxis = {
@@ -2310,7 +2311,7 @@ $.widget("sv.plot_bargraph", $.sv.plot_echarts, {
 		var categoryAxis = {
 				show: true,
 				type: 'category',
-				data: labels
+				data: xlabels
 		};
 		var xAxis = mode == 'vertical' ? categoryAxis : valueAxis;
 		var yAxis = mode == 'vertical' ? valueAxis : categoryAxis;
@@ -2336,6 +2337,10 @@ $.widget("sv.plot_bargraph", $.sv.plot_echarts, {
 			series: [{
 				type: 'bar',
 				colorBy: 'data',
+				label: {
+					show: this.options.datalabel != 'off',
+					position: this.options.datalabel == 'inside' ? 'inside' : mode == 'horizontal' ? 'right' : 'top',
+				}
             }],
         };
 		$.extend(true, option, this.options.chartOptions);
@@ -2344,13 +2349,16 @@ $.widget("sv.plot_bargraph", $.sv.plot_echarts, {
     },
 
     _update: function(response) {
+		var datalabelcolor = [];	
+		if (this.options.datalabelcolor) 
+			datalabelcolor = String(this.options.datalabelcolor).explode();
         var data = [];
         var items = this.items;
         for (i = 0; i < items.length; i++) {
             if (response[i])
-                data[i] = response[i];
+                data[i] = {value: response[i], label: datalabelcolor == undefined ? null : {color: datalabelcolor [i]}};
             else
-                data[i] = widget.get(items[i]);
+                data[i] = {value: widget.get(items[i]), label: datalabelcolor == undefined ? null : {color: datalabelcolor [i]}} ;
         }
 
    		this.chart.setOption({series: [{data: data}]});
