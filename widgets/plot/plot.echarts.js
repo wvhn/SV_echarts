@@ -29,7 +29,7 @@
 $.widget("sv.plot_echarts", $.sv.widget, {
 	
 	_changeSize: function(){
-		//DEBUG: console.log('resize');
+		//DEBUG: console.log('changesize');
 		this.chart.resize();
 	},
 	
@@ -41,25 +41,28 @@ $.widget("sv.plot_echarts", $.sv.widget, {
 		this.chart = echarts.init(this.element[0]);
 		this.chart.setOption(option);
 
-		// resize when the browser has finished layout calculation. To get the size correctly, class="plot" is required in the widget div
+		// resize during layout calculation. To get the size correctly, class="plot" is required in the widget div
 		// modern browsers can observe the resize
 		if (typeof ResizeObserver != "undefined"){
 			var observer = new ResizeObserver(function(entries, observer){
 				if ($(entries[0].target).width() > 10 && $(entries[0].target).height() > 0 ) {
+					// DEBUG: 
+					console.log('resize observed on echarts instance ', $(that.element[0]).attr('_echarts_instance_'))
 					that.element.css('width', '100%');
 					that.chart.resize();
-					observer.disconnect();
+					// stop observing if layout is finished
+					$(document).one('pagecontainershow', function () {observer.disconnect();})
 				}
 			})  
 			observer.observe(that.element[0]); 
 		} else {
-			// 	for legacy browsers we use the events for pageshow, popups and collapsible expand 
+			// for legacy browsers we use the events for pageshow, popups and collapsible expand 
+			// DEBUG: console.log('legacy resize method applied on echarts instance ', $(that.element[0]).attr('_echarts_instance_'))
 			this.element.css('width', '100%');
 			$(document).one('pageshow popupbeforeposition', function() {that.chart.resize()});
 			this.element.parents('[data-role="collapsible"][data-collapsed="true"]').one('collapsibleexpand', function() {that.chart.resize()});
 		}
 	},
-	
 	
 	getColorSet: function(){
 		var rules = window.getComputedStyle(document.body);
@@ -92,7 +95,7 @@ $.widget("sv.plot_echarts", $.sv.widget, {
 					 inactiveColor: rules.getPropertyValue('--plot-legend-text'), 
 					 lineStyle: {inactiveColor: rules.getPropertyValue('--plot-legend-text')}
 			},
-		//	label: {color: rules.getPropertyValue('--plot-data-label') }   testen!
+			label: {color: rules.getPropertyValue('--plot-data-label') }  
 		});
 	}
 
@@ -321,19 +324,49 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
 
         var coordLow  = api.coord([xValue, low]);
         var coordHigh = api.coord([xValue, high]);
+		var lowBorder = api.coord([new Date() - new Date().duration(that.options.tmin), 0])[0];
+		var highBorder = api.coord([new Date() - new Date().duration(that.options.tmax),0])[0];
+		var barWidth = (highBorder - lowBorder)/params.dataInsideLength * 0.6;
 
-        var barWidth = 6; 
-
-        return {
+        var bar = {
           type: 'rect',
           shape: {
             x: coordLow[0] - barWidth / 2,
-            y: coordHigh[1],
+            y: coordLow[1],
             width: barWidth,
-            height: coordLow[1] - coordHigh[1]
+            height: coordHigh[1] - coordLow[1]
           },
           style: api.style()
         };
+        var textTop = {
+            type: 'text',
+			x: coordHigh[0],
+			y: coordHigh[1] - 10,
+			style: {
+                text: high.toString(),    // maybe add unit?
+                textAlign: 'center',
+				textVerticalAlign: 'bottom',
+				color: rules.getPropertyValue('--plot-data-label'),
+				fontSize: 7
+			}
+		};
+		var textBottom = {
+            type: 'text',
+			x: coordLow[0],
+			y: coordLow[1] + 10,
+			style: {
+                text: low.toString(),
+                textAlign: 'center',
+				textVerticalAlign: 'top',
+				color: rules.getPropertyValue('--plot-data-label'),
+				fontSize: 7
+			}
+		};
+
+		return {
+			type: 'group',
+			children: [bar, textTop, textBottom]
+		}
       }
 
       // === Series ===
@@ -345,23 +378,24 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
 		var stack = (stacks.length-1 >= i ? stacks[i]: stacks[stacks.length-1]);
 //			var stackingMode = (stacking[stack] ? stacking[stack] : stacking[0]);
         var exp = exposure[i] ? exposure[i].toLowerCase() : "";
-        var sName = label[i] || `Item ${i+1}`;
+        var seriesName = label[i] || `Item ${i+1}`;
         var yAxisIndex = assign[i] || 0;
         if(mode == 'minmax' || mode == 'minmaxavg') {
           this.baseSeries.push({
-            name: sName + (mode === "minmaxavg" ? " (min/max)" : ""),
+            name: seriesName + (mode === "minmaxavg" ? " (min/max)" : ""),
             type: "custom",
+			clip: true,
             renderItem: renderMinMax,
             encode: { x: 0, y: [1, 2] }, // data format: [time, min, max]
             data: [], // reserve for filling up with item update 
             yAxisIndex,
-            itemStyle: { color: seriesColor }
+            itemStyle: { color: seriesColor },
           });
         }
         if(mode != 'minmax') {
           var type = exp.includes("column") ? "bar" : "line";
           this.baseSeries.push({
-            name: sName,
+            name: seriesName,
             type: type,
 			symbol: "none",
             data: [],
@@ -533,7 +567,11 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
         yAxis,
         series: this.baseSeries,
         dataZoom,
-		color: this.getColorSet()
+		color: this.getColorSet(),
+		label: {
+			show: false,
+			color: rules.getPropertyValue('--plot-data-label')  // in case label is switched on by chartOptions
+		},
       };
 
       // merge user defined options
@@ -2055,11 +2093,11 @@ $.widget("sv.plot_xyplot", $.sv.plot_echarts, {
 			var stack = (stacks.length-1 >= i ? stacks[i]: stacks[stacks.length-1]);
 			// var stackingMode = (stacking[stack] ? stacking[stack] : stacking[0]);
 			var exp = exposure[i] ? exposure[i].toLowerCase() : "";
-			var sName = label[i] || `Item ${i+1}`;
+			var seriesName = label[i] || `Item ${i+1}`;
 			var yAxisIndex = assign[i] || 0;
 			var type = exp.includes("column") ? "bar" : "line";
 			this.baseSeries.push({
-				name: sName,
+				name: seriesName,
 				type: type,
 				symbol: "none",
 				data: [],
