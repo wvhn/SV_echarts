@@ -46,8 +46,7 @@ $.widget("sv.plot_echarts", $.sv.widget, {
 		if (typeof ResizeObserver != "undefined"){
 			var observer = new ResizeObserver(function(entries, observer){
 				if ($(entries[0].target).width() > 10 && $(entries[0].target).height() > 0 ) {
-					// DEBUG: 
-					console.log('resize observed on echarts instance ', $(that.element[0]).attr('_echarts_instance_'))
+					// DEBUG: console.log('resize observed on echarts instance ', $(that.element[0]).attr('_echarts_instance_'))
 					that.element.css('width', '100%');
 					that.chart.resize();
 					// stop observing if layout is finished
@@ -706,7 +705,7 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
 	}
 });
 
-/**  not yet used
+/** plot styles available in base.css but not yet used for echarts
 	--plot-legend-text-hover
 	--plot-legend-item-hidden
 	--plot-markers
@@ -717,9 +716,9 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
 	--plot-polar-line
 */
 
-/**
+
 // ----- plot.gauge solid ------------------------------------------------------
-$.widget("sv.plot_gauge_", $.sv.widget, {
+$.widget("sv.plot_gauge_solid", $.sv.plot_echarts, {
 
     initSelector: 'div[data-widget="plot.gauge"][data-mode^="solid"]',
 
@@ -735,156 +734,144 @@ $.widget("sv.plot_gauge_", $.sv.widget, {
     },
 
     _create: function() {
-        this._super();
+        this._super();	  
+		this.element.css('width', '10%');
+		this.element.css('height', '400px');
+		// get Styles from the body to retrieve plo color variables
+		var rules = window.getComputedStyle(document.body);
 
-        var stop = [];
-        if (this.options.stop && this.options.color) {
-            var datastop = String(this.options.stop).explode();
-            var color = String(this.options.color).explode();
-
-            if (datastop.length == color.length)
-            {
-                for (var i = 0; i < datastop.length; i++) {
-                    stop[i] = [ parseFloat(datastop[i])/100, color[i]]
-                }
-            }
-        }
-
-        var unit = this.options.unit;
+        var mode = this.options.mode.slice(6);
+		var unit = this.options.unit;
         var headline = this.options.label ? this.options.label : null;
 
-        var diff = parseFloat(this.options.min);
-        var range = parseFloat(this.options.max) - parseFloat(this.options.min);
-
         var axis = String(this.options.axis).explode();
-
-        var options = {
-            chart: {
-                type: 'solidgauge',
-                spacing: [0, 0, 5, 0],
-                className: 'solidgauge',
-				styledMode: true
-            },
-
-            title: {
-                text: headline,
-                verticalAlign: 'middle'
-            },
-
-            pane: {
-                background: [{
-                    outerRadius: '100%',
-                    innerRadius: '60%',
-                    shape: 'arc'
-                }]
-            },
-
-            tooltip: {
-                enabled: false
-            },
-
-            // the value axis
-            yAxis: {
-                min: 0,
-                max: 100,
-                stops: stop.length > 0 ? stop : null,
-                lineWidth: 0,
-                minorTickInterval: null,
-                minTickInterval: 1,
-                tickAmount: 2,
-                labels: {
-                    distance: -15,
-                    step: 1,
-                    enabled: true,
-                    formatter: function () { return (((this.value * range) / 100) + diff); }
-                }
-            },
-			
-			navigation: {	// options for export context menu
-				buttonOptions: {
-					enabled: false
+		var startAngles = {half: 180, cshape: 220, circle: 90}
+		var endAngles = {half: 0, cshape:  -40, circle: -270}
+		var titleOffsets = {half: '-30%', cshape:  '-10%', circle: '-5%'}
+		var detailOffsets = {half: '-15%', cshape:  '5%', circle: '10%'}
+		var that = this;
+		
+		this.gaugeData = [{
+				value: null,
+				color: 'red',
+				name: headline,
+				title: {offsetCenter: ['0%', titleOffsets[mode]], color: rules.getPropertyValue('--plot-title')},
+				detail: {
+					valueAnimation: true,
+					offsetCenter: ['0%', detailOffsets[mode]]
 				}
-			},
-			
-            plotOptions: {
-                solidgauge: {
-                    dataLabels: {
-                        useHTML: true
-                    },
-                    stickyTracking: false
-                },
-            },
-			accessibility: {
-				enabled: false
-			},
-
-            series: [{
-                name: headline,
-                dataLabels: {
-                    formatter: function () { return (((this.y * range) / 100) + diff).transUnit(unit); }
-                },
-                colorIndex: 99, colorByPoint: false // Workaround for dynamic coloring in styled mode
-            }]
-        }
-
-        var marginBottom;
-        if (this.options.mode == 'solid-half')
-        {
-            options.chart.margin = [-30, 15, 30, 15];
-            options.chart.height = '53%';
-            options.pane.startAngle = -90;
-            options.pane.endAngle = 90;
-            options.pane.size = '140%';
-            options.pane.center = ['50%', '100%'];
-            options.title.verticalAlign = 'bottom';
-            options.yAxis.labels.y = 16;
-            options.yAxis.labels.distance = -8;
-            options.plotOptions.solidgauge.dataLabels.y = -25;
-        }
-        else if (this.options.mode == 'solid-cshape')
-        {
-            options.chart.margin = [25, 15, -25, 15];
-            options.chart.height = '75%';
-            options.pane.startAngle = -130;
-            options.pane.endAngle = 130;
-            options.pane.size = '100%';
-            options.pane.center = ['50%', '50%'];
-            options.yAxis.labels.y = 20;
-            options.plotOptions.solidgauge.dataLabels.y = -15;
-        }
-        else if (this.options.mode == 'solid-circle')
-        {
-            options.chart.margin = [0, 15, 0, 15],
-            options.chart.height = '88%';
-            options.pane.startAngle = 0;
-            options.pane.endAngle = 360;
-            options.pane.center = ['50%', '50%'];
-            options.pane.background.shape = 'circle';
-            options.yAxis.labels.y = -20;
-            options.yAxis.labels.step = 2;
-            options.plotOptions.solidgauge.dataLabels.y = -10;
-        }
-        options.title.y = options.plotOptions.solidgauge.dataLabels.y + options.chart.margin[0];
-
-        this.element.highcharts(options);
-    },
-
-    _update: function(response) {
+			  }];
+			  
+		var option = {
+			series: [
+			  {
+			  type: 'gauge',
+			  startAngle: startAngles[mode] || 180,
+			  endAngle: endAngles[mode] || 0,
+			  min: parseFloat(this.options.min),
+			  max: parseFloat(this.options.max),
+			  pointer: {
+				show: false
+			  },
+			  progress: {
+				show: true,
+				overlap: false,
+				roundCap: false,
+				clip: false,
+				itemStyle: {
+				  borderWidth: 0,
+				  borderColor: 'none'
+				}
+			  },
+			  axisLine: {
+				lineStyle: {
+				  width: 60,
+			      shadowBlur: 2,
+				  shadowColor: '#000'
+				}
+			  },
+			  splitLine: {
+				show: false,
+				distance: 0,
+				length: 10
+			  },
+			  axisTick: {
+				show: false
+			  },
+			  axisLabel: {
+				show: true,
+				distance: mode == 'circle' ? -25: -15,
+				color: rules.getPropertyValue('--plot-axis-labels'),
+				formatter: function(value){
+					if (mode == 'circle')
+						return value == parseFloat(that.options.min) ? value : '';
+					else
+						return value == parseFloat(that.options.max) || value == parseFloat(that.options.min) ? '\n\n'+value : '';
+				}
+			  },
+			  data: this.gaugeData,
+			  detail: {
+				width: 50,
+				height: 14,
+				fontSize: 14,
+				color: rules.getPropertyValue('--plot-title'),
+				borderColor: rules.getPropertyValue('--plot-title'),
+				borderRadius: 20,
+				borderWidth: 1,
+				formatter: function(params) {
+					return `${params.transUnit(unit)}`
+				}
+			  }
+			}
+		  ]
+		};
+		this.chartInit(option);
+	},
+	
+	_update: function(response) {
         if (response) {
-            var diff = parseFloat(this.options.min);
-            var range = parseFloat(this.options.max) - parseFloat(this.options.min);
-            var percent = (((response - diff) * 100) / range);
-            var chart = this.element.highcharts();
-            if(chart.series[0].points[0])
-                chart.series[0].points[0].update(percent, true);
-            else
-                chart.series[0].addPoint(percent, true);
-        }
-    },
+	        var diff = parseFloat(this.options.min);
+			var range = parseFloat(this.options.max) - parseFloat(this.options.min);
+			var newColor;
+
+			if (this.options.stop && this.options.color) {
+				var datastop = String(this.options.stop).explode();
+				var color = String(this.options.color).explode();
+				newColor = color[0];
+				if (datastop.length == color.length) {
+					for (var i = 0; i < datastop.length; i++) {
+						if (diff + parseFloat(datastop[i]/100)*range <= response)
+							newColor = color[i];
+					}
+				}
+			} else
+				newColor = this.getColorSet()[0];
+
+			this.gaugeData[0].value = response;
+			this.chart.setOption({series: [{ data: this.gaugeData }], color: newColor});
+		}
+	},
+	
+	_changeColorScheme: function(){
+   		var rules = window.getComputedStyle(document.body);
+		var newColor;
+		this.gaugeData[0].title.color = rules.getPropertyValue('--plot-title');
+		
+		if (this.options.stop && this.options.color)
+			newColor = this.chart.getOption().series[0].color;
+		else
+			newColor = this.getColorSet()[0];
+		this.chart.setOption( {
+	        title: { textStyle: {color: rules.getPropertyValue('--plot-title')}, subtextStyle: {color: rules.getPropertyValue('--plot-subtitle')} },
+			label: {color: rules.getPropertyValue('--plot-data-label') } ,
+			series: {detail:{ color: rules.getPropertyValue('--plot-title'), borderColor: rules.getPropertyValue('--plot-title')}, data: this.gaugeData, color: newColor, axisLabel:{color: rules.getPropertyValue('--plot-axis-labels')}}
+		});
+	}
 
 });
 
 
+/**
 // ----- plot.gauge angular ----------------------------------------------------
 $.widget("sv.plot_gauge_angular", $.sv.widget, {
 
@@ -1382,9 +1369,9 @@ $.widget("sv.plot_gauge_vumeter", $.sv.widget, {
 
 
 // ----- plot.gauge ----------------------------------------------------------
-$.widget("sv.plot_gauge_echarts", $.sv.plot_echarts, {
+$.widget("sv.plot_gauge_nonsolid", $.sv.plot_echarts, {
 
-    initSelector: 'div[data-widget="plot.gauge"]',
+    initSelector: 'div[data-widget="plot.gauge"]:not([data-mode^="solid"])',
 
     options: {
       stop: '',
@@ -1457,66 +1444,12 @@ $.widget("sv.plot_gauge_echarts", $.sv.plot_echarts, {
       }
 
       // MODE handling
-      var mode = this.options.mode || 'solid-circle';
+      var mode = this.options.mode;
 
-      if (mode.indexOf('solid') === 0) {
-        // solid gauges: circle / half / cshape
-        var startAngle = 90;
-        var endAngle = -270; // full circle by default in ECharts gauge is 225..-45 but we'll use start/end via series.startAngle
-        var center = ['50%', '50%'];
-        var radius = '85%';
-        var angleOffset = 0;
-
-        if (mode === 'solid-half') {
-          // half: -90 .. 90 (left to right)
-          startAngle = 180;
-          // ECharts gauge uses clockwise angles: startAngle=180 show half circle downwards -> we can use startAngle and endAngle via progress shape
-          // We'll approximate by using startAngle and split axisLine visual.
-          center = ['50%', '75%'];
-          radius = '95%';
-          angleOffset = -90;
-        } else if (mode === 'solid-cshape') {
-          // c-shape: approx -130 .. 130 -> set startAngle=230 (or -130)
-          angleOffset = -130;
-          center = ['50%', '55%'];
-          radius = '95%';
-        } else if (mode === 'solid-circle') {
-          angleOffset = 90; // full circle center
-          center = ['50%', '50%'];
-          radius = '85%';
-        }
-
-        // Single gauge series using ECharts gauge type
-        opt.series.push({
-          name: this.options.label || '',
-          type: 'gauge',
-          radius: radius,
-          center: center,
-          startAngle: angleOffset + 0,
-          endAngle: angleOffset - 360,
-          min: 0,
-          max: 100,
-          splitNumber: 10,
-          axisLine: {
-            lineStyle: {
-              width: Math.round(parseInt(radius,10) || 80) * 0.12, // approximate thickness
-              color: axisColors
-            }
-          },
-          axisTick: { show: false },
-          splitLine: { length: 10, lineStyle: { color: axisStyle && axisStyle.axis || '#999' } },
-          axisLabel: { distance: 5, color: axisStyle && axisStyle.label || '#333' },
-          pointer: { width: 6 },
-          detail: { formatter: '{value} ' + unit, fontSize: 14 },
-          data: [ { value: 0, name: this.options.label || '' } ],
-          // keep unit info for tooltip
-          unit: unit
-        });
-
-      } else if (mode === 'speedometer' || mode === 'scale') {
+      if (mode === 'speedometer' || mode === 'scale') {
         // speedometer/scale: use gauge with narrower arc and custom axisLine segments
-        var sStart = mode === 'scale' ? -130 : -150;
-        var sEnd = mode === 'scale' ? 130 : 150;
+        var sStart = mode === 'scale' ? 220 : 240;
+        var sEnd = mode === 'scale' ? -40 : -60;
         opt.series.push({
           name: this.options.label || '',
           type: 'gauge',
@@ -1550,8 +1483,8 @@ $.widget("sv.plot_gauge_echarts", $.sv.plot_echarts, {
             type: 'gauge',
             center: [cx, '75%'],
             radius: '55%',
-            startAngle: -45,
-            endAngle: 45,
+            startAngle: 150,
+            endAngle: 30,
             min: 0, max: 100,
             splitNumber: 10,
             axisLine: { lineStyle: { width: 10, color: axisColors } },
@@ -1628,15 +1561,6 @@ $.widget("sv.plot_gauge_echarts", $.sv.plot_echarts, {
         chart.resize();
       }
     },
-
-    _destroy: function() {
-      // dispose chart if created directly
-      if (this.chart) {
-        try { this.chart.dispose(); } catch(e) {}
-        this.chart = null;
-      }
-      this._super();
-    }
 
   });
 
