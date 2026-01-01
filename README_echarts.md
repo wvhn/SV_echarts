@@ -1,8 +1,8 @@
 # SV_echarts
-This repository brings echarts as alternative charting library into smartVISU. It works with smartVISU develop v3.5.a as of 12.12.2025, as well as upcoming v3.6 and above.
+This repository brings echarts as alternative charting library into smartVISU. It works with smartVISU develop v3.5.a as of 12.12.2025, as well as v3.6 and above.
 
 # Installation
-Copy the files into the smartVISU file atructure. Folders are named accordingly. A download as ZIP archive and extracting into the smartVISU root folder should also work.
+Copy the files into the smartVISU file atructure. Folders are named accordingly. Downloading the ZIP archive and extracting it into the smartVISU root folder should also work.
 
 # Activation
 Open config.ini in smartVISU root folder and add the line
