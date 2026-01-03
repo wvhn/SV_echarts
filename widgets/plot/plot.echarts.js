@@ -96,6 +96,28 @@ $.widget("sv.plot_echarts", $.sv.widget, {
 			},
 			label: {color: rules.getPropertyValue('--plot-data-label') }  
 		});
+	},
+	
+	// color interpolation (idea: https://gist.github.com/rosszurowski/67f04465c424a9bc0dae)
+	interpolateColor: function(colFrom, colTo, ratio){
+		if (ratio <= 0) return colFrom;
+		if (ratio >= 1) return colTo;
+		var fHex = +colFrom.replace('#', '0x'), 
+			tHex = +colTo.replace('#', '0x') ,
+
+			fr = (fHex & 0xFF0000) >> 16,
+            fg = (fHex & 0x00FF00) >> 8,
+            fb = (fHex & 0x0000FF),
+
+            tr = (tHex & 0xFF0000) >> 16,
+            tg = (tHex & 0x00FF00) >> 8,
+            tb = (tHex & 0x0000FF),
+			
+			rr = fr + ratio * (tr - fr),
+			rg = fg + ratio * (tg - fg),
+			rb = fb + ratio * (tb - fb);
+
+		return '#' + ((1 << 24) + (rr << 16) + (rg << 8) + rb | 0).toString(16).slice(1);
 	}
 
 }),
@@ -745,10 +767,10 @@ $.widget("sv.plot_gauge_solid", $.sv.plot_echarts, {
         var headline = this.options.label ? this.options.label : null;
 
         var axis = String(this.options.axis).explode();
-		var startAngles = {half: 180, cshape: 220, circle: 90}
-		var endAngles = {half: 0, cshape:  -40, circle: -270}
-		var titleOffsets = {half: '-30%', cshape:  '-10%', circle: '-5%'}
-		var detailOffsets = {half: '-15%', cshape:  '5%', circle: '10%'}
+		var startAngles = {half: 180, cshape: 220, circle: 90};
+		var endAngles = {half: 0, cshape:  -40, circle: -270};
+		var titleOffsets = {half: '-30%', cshape:  '-10%', circle: '-5%'};
+		var detailOffsets = {half: '-15%', cshape:  '5%', circle: '10%'};
 		var that = this;
 		
 		this.gaugeData = [{
@@ -835,14 +857,20 @@ $.widget("sv.plot_gauge_solid", $.sv.plot_echarts, {
 			var newColor;
 
 			if (this.options.stop && this.options.color) {
-				var datastop = String(this.options.stop).explode();
+				var datastop = String(this.options.stop).explode().map(function(entry){return diff + parseFloat(entry)/100 * range});
 				var color = String(this.options.color).explode();
+				var newColorIndex = 0;
 				newColor = color[0];
 				if (datastop.length == color.length) {
 					for (var i = 0; i < datastop.length; i++) {
-						if (diff + parseFloat(datastop[i]/100)*range <= response)
-							newColor = color[i];
+						if (datastop[i] <= response)
+							newColorIndex = i;
 					}
+					if (newColorIndex < datastop.length-1){
+						var ratio = (response - datastop[newColorIndex])/(datastop[newColorIndex+1]-datastop[newColorIndex]);
+						newColor = this.interpolateColor(color[newColorIndex], color[newColorIndex+1], ratio);
+					} else
+						newColor = color[datastop.length-1];
 				}
 			} else
 				newColor = this.getColorSet()[0];
@@ -871,505 +899,8 @@ $.widget("sv.plot_gauge_solid", $.sv.plot_echarts, {
 });
 
 
-/**
-// ----- plot.gauge angular ----------------------------------------------------
-$.widget("sv.plot_gauge_angular", $.sv.widget, {
-
-    initSelector: 'div[data-widget="plot.gauge"][data-mode="speedometer"], div[data-widget="plot.gauge"][data-mode="scale"]',
-
-    options: {
-        stop: '',
-        color: '',
-        unit: '',
-        label: '',
-        axis: '',
-        min: '',
-        max: '',
-        mode: '',
-    },
-
-    _create: function() {
-        this._super();
-
-        var headline = this.options.label ? this.options.label : null;
-        var unit = this.options.unit;
-        var axis = String(this.options.axis).explode();
-        var mode = this.options.mode;
-        var datastop = String(this.options.stop).explode();
-        var color = String(this.options.color).explode();
-
-        var diff = parseFloat(this.options.min);
-        var range = parseFloat(this.options.max - this.options.min);
-//      var percent = (((response - diff) * 100) / range);
-        var percent = 0;
-
-        var styles = [];
-
-        var yaxis = [];
-        var gauge = [];
-        var pane = [];
-        var series = [];
-
-
-        for (var i = 0; i < this.items.length; i++) {
-            if (mode == 'scale') { // type = scale
-                var bands = [{
-                        outerRadius: '99%',
-                        thickness: 15,
-                        from: percent,
-                        to: 100
-                    }];
-
-                if (datastop.length > 0 && color.length > 1)
-                {
-                    for (var j = 0; j < datastop.length; j++) {
-                        bands.push({
-                            outerRadius: '99%',
-                            thickness: 15,
-                            from: j == 0 ? 0 : parseFloat(datastop[j-1]),
-                            to: Math.min(parseFloat(datastop[j]), percent)
-                        });
-                        if(parseFloat(datastop[j]) >= percent)
-                            break;
-                    }
-                    for (var j = 0; j < color.length; j++) {
-                        if(color[j] != '')
-                            styles.push(".highcharts-plot-band:nth-of-type(" + (j + 2) + ") { fill: " + color[j] + "; fill-opacity: 1; }");
-                    }
-
-                }
-                else {
-                    bands.push({
-                        outerRadius: '99%',
-                        thickness: 15,
-                        from: 0,
-                        to: percent,
-                    });
-                    if(color.length > 0)
-                        styles.push(".highcharts-plot-band { fill: " + color[0] + "; fill-opacity: 1; }");
-                }
-
-
-                yaxis[i] = {
-                    min: 0,
-                    max: 100,
-                    minorTickInterval: 1.5,
-                    minorTickLength: 17,
-                    minorTickPosition: 'inside',
-                    minTickInterval: 1,
-                    labels: {
-                        enabled: true,
-                        distance: -25,
-                        formatter: function () {return (((this.value * range) / 100) + diff)}
-                    },
-                    plotBands: bands,
-                    title: {
-                        text: axis[i],
-                        y: 14
-                    }
-                }
-                gauge[i] = {
-                    dial: {
-                        radius: '100%',
-                        baseWidth: 3,
-                        topWidth: 3,
-                        baseLength: '90%', // of radius
-                        rearLength: '-70%'
-                    },
-                    pivot: {
-                        radius: 0
-                    }
-                }
-                pane[i] = {
-                    startAngle: -130,
-                    endAngle: 130,
-                    background: [{
-                        outerRadius: '108%'
-                    }]
-                }
-                series[i] = {
-                    name: headline,
-                    yAxis: i,
-                    dataLabels: {
-                        formatter: function () {return (((this.y * range) / 100) + diff).transUnit(unit)},
-                        y: -20
-                    },
-                    tooltip: {
-                        enabled: false
-                    }
-                }
-            }
-            else // type = speedometer
-            {
-                var bands = [];
-                if (this.options.stop && this.options.color) {
-                    for (var j = 0; j < datastop.length; j++) {
-                        bands.push({
-                            from: j == 0 ? 0 : parseFloat(datastop[j-1]),
-                            to: parseFloat(datastop[j])
-                        });
-                    }
-                    for (var j = 0; j < color.length; j++) {
-                        if(color[j] != '')
-                            styles.push(".highcharts-plot-band:nth-of-type(" + (j + 1) + ") { fill: " + color[j] + "; fill-opacity: 1; }");
-                    }
-                }
-
-                yaxis[i] = {
-                    min: 0,
-                    max: 100,
-                    minorTickInterval: 'auto',
-                    minorTickLength: 10,
-                    minorTickPosition: 'inside',
-                    minTickInterval: 1,
-                    tickPixelInterval: 30,
-                    tickPosition: 'inside',
-                    tickLength: 10,
-                    labels: {
-                        step: 2,
-                        rotation: 'auto',
-                        formatter: function () {return (((this.value * range) / 100) + diff)}
-                    },
-                    title: {
-                        text: axis[i]
-                    },
-                    plotBands: bands.length > 0 ? bands : null
-                }
-                gauge[i] = {
-                }
-                pane[i] = {
-                    startAngle: -150,
-                    endAngle: 150,
-                    size: "95%",
-                    background: [{
-                        className: 'outer-pane',
-                        outerRadius: '109%'
-                    }, {
-                        className: 'middle-pane',
-                        outerRadius: '107%'
-                    }, {
-                    }, {
-                        className: 'inner-pane',
-                        outerRadius: '105%',
-                        innerRadius: '103%'
-                    }]
-                }
-
-                series[i] = {
-                    name: headline,
-                    yAxis: i,
-                    dataLabels: {
-                        formatter: function () {return (((this.y * range) / 100) + diff).transUnit(unit)}
-                    }
-                }
-            }
-        }
-
-        this.element.highcharts({
-            chart: {
-                type: 'gauge',
-                plotShadow: false,
-                height: '100%',
-				styledMode: true
-            },
-            title: {
-                text: headline
-            },
-            navigation: {	// options for export context menu
-				buttonOptions: {
-					enabled: false
-				}
-			},
-			plotOptions: {
-                 gauge: gauge[0],
-            },
-            pane: pane,
-            tooltip: {
-                enabled: false
-            },
-            defs: {
-                speedometerOuterPaneGradient: {
-                    id: 'speedometerOuterPaneGradient',
-                    tagName: 'linearGradient',
-                    x1: 0, y1: 0, x2: 0, y2: 1,
-                    children: [
-                        { tagName: 'stop', offset: 0 },
-                        { tagName: 'stop', offset: 1 },
-                    ]
-                },
-                speedometerMiddlePaneGradient: {
-                    id: 'speedometerMiddlePaneGradient',
-                    tagName: 'linearGradient',
-                    x1: 0, y1: 0, x2: 0, y2: 1,
-                    children: [
-                        { tagName: 'stop', offset: 0 },
-                        { tagName: 'stop', offset: 1 },
-                    ]
-                }
-            },
-			accessibility: {
-				enabled: false
-			},
-            // the value axis
-            yAxis: yaxis,
-            series: series
-        });
-
-        styles.push('.outer-pane { fill: url(' + document.baseURI + '#speedometerOuterPaneGradient) }');
-        styles.push('.middle-pane { fill: url(' + document.baseURI + '#speedometerMiddlePaneGradient) }');
-
-        if(styles.length > 0) {
-            var containerId = this.element.find('.highcharts-container')[0].id;
-            styles.unshift('<style type="text/css">');
-            $(styles.join("\n#" + containerId + " ") + "\n</style>").appendTo(this.element.find('.highcharts-container'));
-        }
-    },
-
-    _update: function(response) {
-        //debug: console.log("[plot.gauge-speedometer] '" + this.id + "' point: " + response);
-
-        var diff = (this.options.max - (this.options.max - this.options.min));
-        var range = this.options.max - this.options.min;
-        var datastop = String(this.options.stop).explode();
-        var color = String(this.options.color).explode();
-
-        var data = [];
-        var items = this.items;
-        for (i = 0; i < items.length; i++) {
-            if (response[i]) {
-                data[i] = (((+response[i] - diff) * 100) / range);
-            }
-            else
-            {
-                data[i] = (((+widget.get(items[i]) - diff) * 100) / range);
-            }
-        }
-
-        var chart = this.element.highcharts();
-
-        for (i = 0; i < data.length; i++) {
-            var percent = data[i];
-            if(this.options.mode == 'scale')
-            {
-                chart.yAxis[i].removePlotBand();
-                chart.yAxis[i].addPlotBand({
-                        outerRadius: '99%',
-                        thickness: 15,
-                        from: percent,
-                        to: 100
-                    });
-                if (datastop.length > 0 && color.length > 1)
-                {
-                    for (var j = 0; j < datastop.length; j++) {
-                        chart.yAxis[i].addPlotBand({
-                            outerRadius: '99%',
-                            thickness: 15,
-                            from: j == 0 ? 0 : parseFloat(datastop[j-1]),
-                            to: Math.min(parseFloat(datastop[j]), percent)
-                        });
-                        if(parseFloat(datastop[j]) >= percent)
-                            break;
-                    }
-                }
-                else {
-                    chart.yAxis[i].addPlotBand({
-                        outerRadius: '99%',
-                        thickness: 15,
-                        from: 0,
-                        to: percent
-                    });
-                }
-                chart.series[i].setData([percent], false);
-            }
-            else {
-                if(chart.series[0].points[0])
-                    chart.series[0].points[0].update(percent, false);
-                else
-                    chart.series[0].addPoint(percent, false);
-            }
-        }
-        chart.redraw();
-    },
-
-});
-
-
-// ----- plot.gauge-vumeter ----------------------------------------------------------
-$.widget("sv.plot_gauge_vumeter", $.sv.widget, {
-
-    initSelector: 'div[data-widget="plot.gauge"][data-mode="vumeter"]',
-
-    options: {
-        stop: '',
-        color: '',
-        unit: '',
-        label: '',
-        axis: '',
-        min: '',
-        max: '',
-        mode: '',
-    },
-
-    _create: function() {
-        this._super();
-
-        var headline = this.options.label ? this.options.label : null;
-        var chartHeight = this.options.label == '' ? 150 : 200;
-
-        var diff = parseFloat(this.options.min);
-        var range = parseFloat(this.options.max) - parseFloat(this.options.min);
-
-        var styles = [];
-
-        var bands = [];
-        if (this.options.stop && this.options.color) {
-            var datastop = String(this.options.stop).explode();
-            var color = String(this.options.color).explode();
-
-            for (var j = 0; j < datastop.length; j++) {
-                bands.push({
-                    from: j == 0 ? 0 : parseFloat(datastop[j-1]),
-                    to: parseFloat(datastop[j]),
-                    innerRadius: '100%',
-                    outerRadius: '105%'
-                });
-            }
-            for (var j = 0; j < color.length; j++) {
-                styles.push(".highcharts-plot-band:nth-of-type(" + (j + 1) + ") { fill: " + (color[j] != '' ? color[j] : 'transparent') + "; fill-opacity: 1; }");
-            }
-        }
-
-        var axis = [];
-        var pane = [];
-        var series = [];
-
-        var seriesCount = this.items.length;
-
-        for (i = 0; i < seriesCount; i++) {
-            axis[i] = {
-                min: 0,
-                max: 100,
-                minorTickPosition: 'outside',
-                tickPosition: 'outside',
-                labels: {
-                    rotation: 'auto',
-                    distance: 20,
-                    formatter: function () {return (((this.value * range) / 100) + diff)}
-                },
-                plotBands: bands,
-                pane: i,
-                title: {
-                    text: 'VU<br/><span style="font-size:8px">Channel ' + (i+1) + '</span>',
-                    y: -40
-                }
-            }
-            pane[i] = {
-                startAngle: -45,
-                endAngle: 45,
-                background: null,
-                center: [(100/seriesCount/2*(2*i+1))+'%', '145%'],
-                size: 280
-            }
-            series[i] = {
-                name: 'Channel ' + i,
-                yAxis: i
-            }
-        }
-
-        this.element.highcharts({
-            chart: {
-                type: 'gauge',
-                height: chartHeight,
-				styledMode: true
-            },
-
-            title: {
-                text: headline,
-            },
-
-            pane: pane,
-
-            tooltip: {
-                enabled: false,
-            },
-
-            // the value axis
-            yAxis: axis,
-			
-			navigation: {	// options for export context menu
-				buttonOptions: {
-					enabled: false
-				}
-			},
-            plotOptions: {
-                gauge: {
-                    dataLabels: {
-                        enabled: false
-                    },
-                    dial: {
-                        radius: '100%'
-                    }
-                }
-            },
-            defs: {
-                vumeterGradient: {
-                    id: 'vumeterGradient',
-                    tagName: 'linearGradient',
-                    x1: 0, y1: 0, x2: 0, y2: 1,
-                    children: [
-                        { tagName: 'stop', offset: 0 },
-                        { tagName: 'stop', offset: 0.3 },
-                        { tagName: 'stop', offset: 1 },
-                    ]
-                }
-            },
-			accessibility: {
-				enabled: false
-			},
-            series: series,
-        });
-        styles.push('.highcharts-plot-background { fill: url(' + document.baseURI + '#vumeterGradient) }');
-
-        if(styles.length > 0) {
-            var containerId = this.element.find('.highcharts-container')[0].id;
-            styles.unshift('<style type="text/css">');
-            $(styles.join("\n#" + containerId + " ") + "\n</style>").appendTo(this.element.find('.highcharts-container'));
-        }
-    },
-
-    _update: function(response) {
-        //debug: console.log("[plot.gauge-vumeter] '" + this.id + "' point: " + response);
-
-        var diff = (this.options.max - (this.options.max - this.options.min));
-        var range = this.options.max - this.options.min;
-
-        var data = [];
-        var items = this.items;
-        for (i = 0; i < items.length; i++) {
-            if (response[i]) {
-                data[i] = (((+response[i] - diff) * 100) / range);
-            }
-            else
-            {
-                data[i] = (((+widget.get(items[i]) - diff) * 100) / range);
-            }
-        }
-
-        var chart = this.element.highcharts();
-        for (i = 0; i < data.length; i++) {
-            if(chart.series[i].points[0])
-                chart.series[i].points[0].update(data[i], false);
-            else
-                chart.series[i].addPoint(data[i], false);
-        }
-        chart.redraw();
-    },
-
-}); */
-
-
-// ----- plot.gauge ----------------------------------------------------------
-$.widget("sv.plot_gauge_nonsolid", $.sv.plot_echarts, {
+// ----- plot.gauge angular ----------------------------------------------------------
+$.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
 
     initSelector: 'div[data-widget="plot.gauge"]:not([data-mode^="solid"])',
 
@@ -1381,7 +912,7 @@ $.widget("sv.plot_gauge_nonsolid", $.sv.plot_echarts, {
       axis: '',
       min: 0,
       max: 100,
-      mode: 'solid-circle' // solid-circle, solid-half, solid-cshape, speedometer, scale, vumeter
+      mode: '' 
     },
 
     _create: function() {
@@ -1390,14 +921,19 @@ $.widget("sv.plot_gauge_nonsolid", $.sv.plot_echarts, {
 	  this.element.css('width', '10%');
 	  this.element.css('height', '400px');
 
-      // helper: parse stop/color pairs -> array of [pct, color] where pct is in 0..1
+      var min = Number(this.options.min) || 0;
+      var max = Number(this.options.max);
+	  var range = max - min; 
+      var unit = this.options.unit || '';
+
+      // parse stop/color pairs -> array of [fraction, color] where fraction is in 0..1
       var stops = [];
       if (this.options.stop && this.options.color) {
-        var ds = String(this.options.stop).explode();
-        var cs = String(this.options.color).explode();
-        for (var i = 0; i < ds.length; i++) {
-          var v = parseFloat(ds[i]);
-          if (!isNaN(v)) stops.push([ Math.max(0, Math.min(1, v/100)), cs[i] ]);
+        var datastop = String(this.options.stop).explode();
+        var color = String(this.options.color).explode();
+        for (var i = 0; i < datastop.length; i++) {
+          var v = parseFloat(datastop[i]);
+          stops.push([ Math.max(0, Math.min(1, v/100)), color[i] ]);
         }
       }
 
@@ -1406,25 +942,11 @@ $.widget("sv.plot_gauge_nonsolid", $.sv.plot_echarts, {
       var axisStyle = this.getAxisStyles();
 
       // build base option depending on mode
-      var opt = {
+      var option = {
         title: { text: this.options.label || '', left: 'center', top: 8 },
         tooltip: { show: !!this.options.unit, formatter: function (p) { return (p.seriesName ? p.seriesName + '<br/>' : '') + (p.value != null ? p.value + ' ' + (p.series && p.series.unit || '') : ''); } },
         series: []
       };
-
-      var min = Number(this.options.min) || 0;
-      var max = Number(this.options.max);
-      if (isNaN(max)) max = min + 100;
-
-      // helper: convert value -> percent(0..100)
-      var toPercent = function(v){
-        v = Number(v);
-        if (isNaN(v)) return 0;
-        var p = ((v - min) / (max - min)) * 100;
-        return Math.max(0, Math.min(100, p));
-      };
-
-      var unit = this.options.unit || '';
 
       // build stop color array for ECharts gauge axisLine: [[pct, color], ...]
       var axisColors = [];
@@ -1450,14 +972,15 @@ $.widget("sv.plot_gauge_nonsolid", $.sv.plot_echarts, {
         // speedometer/scale: use gauge with narrower arc and custom axisLine segments
         var sStart = mode === 'scale' ? 220 : 240;
         var sEnd = mode === 'scale' ? -40 : -60;
-        opt.series.push({
+        option.series.push({
           name: this.options.label || '',
           type: 'gauge',
           radius: '90%',
           center: ['50%', '60%'],
           startAngle: sStart,
           endAngle: sEnd,
-          min: 0, max: 100,
+          min, 
+		  max,
           splitNumber: 10,
           axisLine: {
             lineStyle: { width: 14, color: axisColors }
@@ -1466,7 +989,20 @@ $.widget("sv.plot_gauge_nonsolid", $.sv.plot_echarts, {
           splitLine: { length: 14, lineStyle: { color: axisStyle && axisStyle.axis || '#999' } },
           axisLabel: { color: axisStyle && axisStyle.label || '#333' },
           pointer: { width: 4, length: '70%' },
-          detail: { formatter: '{value} ' + unit, offsetCenter: [0, '60%'] },
+          detail: { 
+			formatter: function(params) {return `${params.transUnit(unit)}`},
+			offsetCenter: [0, '60%'] 
+		  },
+		  progress: {
+			show: mode == 'scale' ? true : false,
+			overlap: false,
+			roundCap: false,
+			clip: false,
+			itemStyle: {
+			  borderWidth: 0,
+			  borderColor: 'none'
+			}
+		  },
           data: [ { value: 0, name: this.options.label || '' } ],
           unit: unit
         });
@@ -1478,14 +1014,15 @@ $.widget("sv.plot_gauge_nonsolid", $.sv.plot_echarts, {
         // compute center positions horizontally
         for (var c = 0; c < channels; c++) {
           var cx = (100 / channels) * (0.5 + c) + '%';
-          opt.series.push({
+          option.series.push({
             name: 'Channel ' + (c+1),
             type: 'gauge',
             center: [cx, '75%'],
             radius: '55%',
             startAngle: 150,
             endAngle: 30,
-            min: 0, max: 100,
+            min, 
+			max,
             splitNumber: 10,
             axisLine: { lineStyle: { width: 10, color: axisColors } },
             axisTick: { show: false },
@@ -1499,7 +1036,7 @@ $.widget("sv.plot_gauge_nonsolid", $.sv.plot_echarts, {
         }
       } else {
         // fallback: simple gauge
-        opt.series.push({
+        option.series.push({
           name: this.options.label || '',
           type: 'gauge',
           min: 0, max: 100,
@@ -1508,25 +1045,13 @@ $.widget("sv.plot_gauge_nonsolid", $.sv.plot_echarts, {
         });
       }
 
-      // store helpers on instance for update
-      this._gaugeHelpers = {
-        toPercent: toPercent,
-        min: min,
-        max: max
-      };
-
-       this.chartInit(opt);
+       this.chartInit(option);
     },
 
     _update: function(response) {
       // response can be single number or array (for VU)
-      if (!this.chart) return;
-      var helpers = this._gaugeHelpers || {};
-      var toPercent = helpers.toPercent;
-      var chart = this.chart || echarts.getInstanceByDom(this.element[0]);
-      if (!chart) return;
 
-      var mode = this.options.mode || 'solid-circle';
+      var mode = this.options.mode;
 
       if (mode === 'vumeter') {
         // expect array or scalar
@@ -1539,26 +1064,21 @@ $.widget("sv.plot_gauge_nonsolid", $.sv.plot_echarts, {
         }
 
         // update each series individually (limit to series length)
-        var sLen = chart.getOption().series.length;
+        var sLen = this.chart.getOption().series.length;
         for (var i = 0; i < sLen; i++) {
           var raw = values[i] !== undefined ? values[i] : 0;
-          var pct = toPercent(raw);
-          chart.setOption({
-            series: [{ id: chart.getOption().series[i].id || null, data: [{ value: Math.round(pct) }] , center: chart.getOption().series[i].center }]
-          }, false);
+          this.chart.setOption({
+            series: [{ id: this.chart.getOption().series[i].id || null, data: [{ value: raw }] , center: this.chart.getOption().series[i].center }]
+          });
           // direct dispatch to set value might be done with chart.setOption in batch
         }
-        chart.resize(); // ensure redraw
       } else {
         // single gauge (first series)
         var rawValue = ( $.isArray(response) ? response[0] : response );
-        if (rawValue === undefined || rawValue === null) return;
-        var pct = toPercent(rawValue);
         // set series[0].data[0].value
-        chart.setOption({
-          series: [{ data: [{ value: Math.round(pct) }] }]
-        }, false);
-        chart.resize();
+        this.chart.setOption({
+          series: [{ data: [{ value: rawValue }] }]
+        });
       }
     },
 
