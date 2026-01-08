@@ -917,15 +917,21 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
 
     _create: function() {
       this._super(); 
-	  
-	  this.element.css('width', '10%');
-	  this.element.css('height', '400px');
 
       var min = Number(this.options.min) || 0;
       var max = Number(this.options.max);
 	  var range = max - min; 
       var unit = this.options.unit || '';
+      var mode = this.options.mode;
+	  
+	  var chartHeight = 400;
+	  if (mode == 'vumeter')
+		  chartHeight = this.options.label == '' ? 150 : 200;
+	  this.element.css('width', '10%');
+	  this.element.css('height', chartHeight);
 
+
+	  
       // parse stop/color pairs -> array of [fraction, color] where fraction is in 0..1
       var stops = [];
       if (this.options.stop && this.options.color) {
@@ -933,40 +939,36 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
         var color = String(this.options.color).explode();
         for (var i = 0; i < datastop.length; i++) {
           var v = parseFloat(datastop[i]);
-          stops.push([ Math.max(0, Math.min(1, v/100)), color[i] ]);
+          stops.push([ Math.max(0, Math.min(1, v/100)), color[i] ? color[i] : color[i-1] ]);
         }
       }
 
-      // get palette / axis styles from parent methods if available
+      // get palette / axis styles from parent methods 
       var palette = this.getColorSet();
       var axisStyle = this.getAxisStyles();
+	  var backgroundColor = mode !='vumeter' ? null : {
+		  type: 'linear',
+		  x: 0,
+		  y: 0,
+          x2: 0,
+          y2: 1,
+		  colorStops: [{
+			  offset: 0, color: '#FFF4C6' // color at 0%
+		  }, {
+			  offset: 0.3, color: '#fff' // color at 0%
+		  }, {  
+			  offset: 1, color: '#FFF4C6' // color at 100%
+		  }],
+		  global: false // default is false
+	}
 
-      // build base option depending on mode
+
       var option = {
+		backgroundColor,
         title: { text: this.options.label || '', left: 'center', top: 8 },
         tooltip: { show: !!this.options.unit, formatter: function (p) { return (p.seriesName ? p.seriesName + '<br/>' : '') + (p.value != null ? p.value + ' ' + (p.series && p.series.unit || '') : ''); } },
         series: []
       };
-
-      // build stop color array for ECharts gauge axisLine: [[pct, color], ...]
-      var axisColors = [];
-      if (stops.length) {
-        // ECharts expects [[fraction, color], ...] with fractions cumulative from 0..1
-        axisColors = stops.slice();
-        // ensure there is a final color to cover remainder (use last color or transparent)
-        var last = axisColors[axisColors.length - 1];
-        if (last[0] < 1) axisColors.push([1, last[1]]);
-      } else {
-        // default: use palette if available
-        if (palette && palette.length) {
-          axisColors = [[1, palette[0]]];
-        } else {
-          axisColors = [[1, '#91c7ae']];
-        }
-      }
-
-      // MODE handling
-      var mode = this.options.mode;
 
       if (mode === 'speedometer' || mode === 'scale') {
         // speedometer/scale: use gauge with narrower arc and custom axisLine segments
@@ -983,7 +985,7 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
 		  max,
           splitNumber: 10,
           axisLine: {
-            lineStyle: { width: 14, color: axisColors }
+            lineStyle: { width: 14, color: stops.length > 0 ? stops : [1, palette[0]] }
           },
           axisTick: { length: 10, lineStyle: { color: axisStyle && axisStyle.axis || '#999' } },
           splitLine: { length: 14, lineStyle: { color: axisStyle && axisStyle.axis || '#999' } },
@@ -1010,27 +1012,42 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
       } else if (mode === 'vumeter') {
         // VU-Meter: multiple small gauges side-by-side
         // items count — try to reuse this.items if defined (like your Highcharts code)
-        var channels = (this.items && this.items.length) ? this.items.length : 2;
+        var channels = this.items.length;
         // compute center positions horizontally
         for (var c = 0; c < channels; c++) {
           var cx = (100 / channels) * (0.5 + c) + '%';
           option.series.push({
-            name: 'Channel ' + (c+1),
             type: 'gauge',
-            center: [cx, '75%'],
-            radius: '55%',
-            startAngle: 150,
-            endAngle: 30,
+            center: [cx, '145%'],
+            radius: '211%',
+            startAngle: 135,
+            endAngle: 45,
             min, 
 			max,
-            splitNumber: 10,
-            axisLine: { lineStyle: { width: 10, color: axisColors } },
+            axisLine: { lineStyle: { width: 10, color: stops.length > 0 ? stops : [1, palette[0]] } },
             axisTick: { show: false },
-            splitLine: { length: 8 },
-            axisLabel: { distance: 10, formatter: function(v){ return v; } },
-            pointer: { length: '60%', width: 6 },
-            detail: { formatter: function(v){ return ''; }, show: false },
-            data: [ { value: 0, name: 'VU' } ],
+            splitLine: {show: false },
+            axisLabel: {show: false },
+            pointer: {show:false },
+            detail: { show: false },
+            data: []
+		  },{
+            name: 'Channel ' + (c+1),
+            type: 'gauge',
+            center: [cx, '145%'],
+            radius: '200%',
+            startAngle: 135,
+            endAngle: 45,
+            min, 
+			max,
+            splitNumber: 2,
+            axisLine: { lineStyle: { width: 1, color: [[1, '#000']]}},
+            axisTick: { show: false },
+            splitLine: { length: 10, width: 1, distance: -10 },
+            axisLabel: { distance: -30 },
+            pointer: { length: '110%', width: 2, itemStyle: {color: '#000' }},
+            detail: { show: false },
+            data: [ { value: null, name: 'VU' } ],
             unit: unit
           });
         }
@@ -1056,22 +1073,19 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
       if (mode === 'vumeter') {
         // expect array or scalar
         var values = [];
-        if ($.isArray(response)) values = response;
-        else if (typeof response === 'number') values = [response];
-        else if (response && typeof response === 'object') {
-          // maybe object of channels
-          for (var k in response) { if (response.hasOwnProperty(k)) values.push(response[k]); }
-        }
+        if ($.isArray(response)) 
+			values = response;
+        else 
+			values = [response];
 
         // update each series individually (limit to series length)
-        var sLen = this.chart.getOption().series.length;
+		var newSeries = this.chart.getOption().series;
+        var sLen = newSeries.length / 2;
         for (var i = 0; i < sLen; i++) {
-          var raw = values[i] !== undefined ? values[i] : 0;
-          this.chart.setOption({
-            series: [{ id: this.chart.getOption().series[i].id || null, data: [{ value: raw }] , center: this.chart.getOption().series[i].center }]
-          });
-          // direct dispatch to set value might be done with chart.setOption in batch
-        }
+          if (values[i] !== undefined)
+			newSeries[2*i+1].data[0].value = values[i];
+		}
+        this.chart.setOption({ series: newSeries });
       } else {
         // single gauge (first series)
         var rawValue = ( $.isArray(response) ? response[0] : response );
