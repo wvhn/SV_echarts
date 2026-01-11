@@ -925,8 +925,10 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
       var mode = this.options.mode;
 	  
 	  var chartHeight = 400;
-	  if (mode == 'vumeter')
+	  if (mode == 'vumeter'){
 		  chartHeight = this.options.label == '' ? 150 : 200;
+		  var bandRadius = this.options.label == '' ? '212%' : '210%';
+	  }
 	  this.element.css('width', '10%');
 	  this.element.css('height', chartHeight);
 
@@ -1019,7 +1021,7 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
           option.series.push({
             type: 'gauge',
             center: [cx, '145%'],
-            radius: '211%',
+            radius: bandRadius,
             startAngle: 135,
             endAngle: 45,
             min, 
@@ -1042,12 +1044,19 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
 			max,
             splitNumber: 2,
             axisLine: { lineStyle: { width: 1, color: [[1, '#000']]}},
-            axisTick: { show: false },
+            axisTick: { length: 6, width: 1, distance: -6 },
             splitLine: { length: 10, width: 1, distance: -10 },
             axisLabel: { distance: -30 },
             pointer: { length: '110%', width: 2, itemStyle: {color: '#000' }},
+			tooltip: {show: false},
             detail: { show: false },
-            data: [ { value: null, name: 'VU' } ],
+            data: [ { value: null, name: 'VU\nChannel '+ (c+1) } ],
+		    title: {
+				show: true,
+				offsetCenter: ['0', '-75%'],
+				textStyle: {fontSize: 10},
+				XfontWeight: 'bold'
+			},
             unit: unit
           });
         }
