@@ -48,6 +48,8 @@ $.widget("sv.plot_echarts", $.sv.widget, {
 				if ($(entries[0].target).width() > 10 && $(entries[0].target).height() > 0 ) {
 					// DEBUG: console.log('resize observed on echarts instance ', $(that.element[0]).attr('_echarts_instance_'))
 					that.element.css('width', '100%');
+					if (that.gaugeHeight) 
+						that.element.css('height', $(entries[0].target).width() * that.gaugeHeight); 
 					that.chart.resize();
 					// stop observing if layout is finished
 					$(document).one('pagecontainershow', function () {observer.disconnect();})
@@ -296,6 +298,7 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
         ymax: '',
         tmin: '',
         tmax: '',
+		count: '',
         label: '',
         color: '',
         exposure: '',
@@ -333,6 +336,20 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
       var ymin     = this.options.ymin != undefined ? String(this.options.ymin).explode() : [];
       var ymax     = this.options.ymax != undefined ? String(this.options.ymax).explode() : [];
       var stacks   = this.options.stacks ? String(this.options.stacks).explode() : [];
+	  
+      // time range
+	  var xMin = new Date() - new Date().duration(this.options.tmin);
+      var xMax = new Date() - new Date().duration(this.options.tmax);
+	  var dayDuration = 24*3600*1000;
+	  var timezoneOffset = this.options.servertime == 'yes' ? parseInt(-Number(sv.serverTimezone.offset)/60) + parseInt(window.servertimeoffset/60000 ||0) : new Date().getTimezoneOffset();
+	  if (zoom == "day"){
+	    xMin -= timezoneOffset * 60000;
+        xMin = xMin - xMin % dayDuration + dayDuration + timezoneOffset * 60000;
+        xMax = xMin + dayDuration;
+        zoom = '';
+      }
+	  
+	  var count = String(this.options.count).explode();
 	  
 	  // get Styles from the body to retrieve plot color variables
 	  var rules = window.getComputedStyle(document.body);
@@ -451,17 +468,7 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
       }
 
       // === X-axis (time) ===
-      var xMin = new Date() - new Date().duration(this.options.tmin);
-      var xMax = new Date() - new Date().duration(this.options.tmax);
-	  var dayDuration = 24*3600*1000;
-	  var timezoneOffset = this.options.servertime == 'yes' ? parseInt(-Number(sv.serverTimezone.offset)/60) + parseInt(window.servertimeoffset/60000 ||0) : new Date().getTimezoneOffset();
-	  if (zoom == "day"){
-	    xMin -= timezoneOffset * 60000;
-        xMin = xMin - xMin % dayDuration + dayDuration + timezoneOffset * 60000;
-        xMax = xMin + dayDuration;
-        zoom = '';
-      }
-      var xAxis = $.extend(true, {
+     var xAxis = $.extend(true, {
         type: "time",
 		name: this.options.axis.explode()[0] || "",
         min: xMin,
@@ -754,6 +761,8 @@ $.widget("sv.plot_gauge_solid", $.sv.plot_echarts, {
         max: '',
         mode: '',
     },
+	
+	gaugeHeight: null,
 
     _create: function() {
         this._super();	  
@@ -769,20 +778,27 @@ $.widget("sv.plot_gauge_solid", $.sv.plot_echarts, {
         var axis = String(this.options.axis).explode();
 		var startAngles = {half: 180, cshape: 220, circle: 90};
 		var endAngles = {half: 0, cshape:  -40, circle: -270};
+		var yCenters = {half: '85%', cshape:  '57%', circle: '50%'};
 		var titleOffsets = {half: '-30%', cshape:  '-10%', circle: '-5%'};
 		var detailOffsets = {half: '-15%', cshape:  '5%', circle: '10%'};
+		
+		// we can set element height to a fraction of element width but need ro correct the gauge radius again 
+		var gaugeHeights = {half: .53, cshape: .75, circle: .88};
+		var gaugeRadius = {half: '142%', cshape: '100%', circle: '85%'};
+		
 		var that = this;
 		
+		this.gaugeHeight = gaugeHeights[mode];
 		this.gaugeData = [{
-				value: null,
-				color: 'red',
-				name: headline,
-				title: {offsetCenter: ['0%', titleOffsets[mode]], color: rules.getPropertyValue('--plot-title')},
-				detail: {
-					valueAnimation: true,
-					offsetCenter: ['0%', detailOffsets[mode]]
-				}
-			  }];
+			value: null,
+			color: 'red',
+			name: headline,
+			title: {offsetCenter: ['0%', titleOffsets[mode]], color: rules.getPropertyValue('--plot-title')},
+			detail: {
+				valueAnimation: true,
+				offsetCenter: ['0%', detailOffsets[mode]]
+			}
+		  }];
 			  
 		var option = {
 			series: [
@@ -792,6 +808,8 @@ $.widget("sv.plot_gauge_solid", $.sv.plot_echarts, {
 			  endAngle: endAngles[mode] || 0,
 			  min: parseFloat(this.options.min),
 			  max: parseFloat(this.options.max),
+			  radius: gaugeRadius[mode],
+			  center: ['50%', yCenters[mode]],
 			  pointer: {
 				show: false
 			  },
@@ -914,6 +932,8 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
       max: 100,
       mode: '' 
     },
+	
+	gaugeHeight: null,
 
     _create: function() {
       this._super(); 
@@ -924,15 +944,17 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
       var unit = this.options.unit || '';
       var mode = this.options.mode;
 	  
-	  var chartHeight = 400;
+	  var gaugeHeight = 400;
 	  if (mode == 'vumeter'){
-		  chartHeight = this.options.label == '' ? 150 : 200;
+		  gaugeHeight = this.options.label == '' ? 150 : 200;
 		  var bandRadius = this.options.label == '' ? '212%' : '210%';
 	  }
 	  this.element.css('width', '10%');
-	  this.element.css('height', chartHeight);
+	  this.element.css('height', gaugeHeight);
 
-
+	  // set gauge height to current width in next resize 
+	  if (mode != 'vumeter')
+		  this.gaugeHeight = 1;
 	  
       // parse stop/color pairs -> array of [fraction, color] where fraction is in 0..1
       var stops = [];
@@ -995,7 +1017,8 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
           pointer: { width: 4, length: '70%' },
           detail: { 
 			formatter: function(params) {return `${params.transUnit(unit)}`},
-			offsetCenter: [0, '60%'] 
+			offsetCenter: [0, '20%'],
+			fontSize: 16,
 		  },
 		  progress: {
 			show: mode == 'scale' ? true : false,
