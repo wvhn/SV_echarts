@@ -46,7 +46,7 @@ $.widget("sv.plot_echarts", $.sv.widget, {
         if (typeof ResizeObserver != "undefined"){
             var observer = new ResizeObserver(function(entries, observer){
                 if ($(entries[0].target).width() > 10 && $(entries[0].target).height() > 0 ) {
-                    // DEBUG: console.log('resize observed on echarts instance ', $(that.element[0]).attr('_echarts_instance_'))
+                    // DEBUG: console.log('resize observed on echarts instance ', $(that.element[0]).attr('_echarts_instance_'), ', width = ', $(entries[0].target).width() )
                     that.element.css('width', '100%');
                     if (that.gaugeHeight) 
                         that.element.css('height', $(entries[0].target).width() * that.gaugeHeight); 
@@ -105,7 +105,15 @@ $.widget("sv.plot_echarts", $.sv.widget, {
         this.chart = null;
         this.baseSeries = null;
     },
-
+    
+    _exit: function(){
+        // register event handler to resize the plot when returning to the page
+        var that = this;
+        var currentPage = sv.activePage[0].id;
+        $(document).one('pageshow', '#'+ currentPage, function(){
+            that.chart.resize();
+        })
+    },
 
     // color interpolation (idea: https://gist.github.com/rosszurowski/67f04465c424a9bc0dae)
     interpolateColor: function(colFrom, colTo, ratio){
@@ -234,6 +242,8 @@ $.widget("sv.plot_heatingcurve", $.sv.plot_echarts, {
 
     _create: function() {
         this._super();
+        // give plot a height and width
+        this.element.addClass('plot');
 
         var plots = Array();
 
@@ -326,6 +336,25 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
 
     _create: function() {
         this._super();
+        
+        // Prepare options for sparkline mode (will later be merged into the chart object and override the composition of the full plot)
+        if (this.options.chartOptions && this.options.chartOptions.hasOwnProperty('mode') && this.options.chartOptions.mode == 'sparkline'){
+            var width = this.options.chartOptions.width;
+            var height = this.options.chartOptions.height;
+            this.element.css('height', height + 2)
+            this.options.chartOptions = {
+                width,
+                height, 
+                grid: { left: 1, top: 1, right: 1, bottom: 1 },
+                title: {text: null},
+                xAxis: [{name: null, axisLine: {show: true}, axisTick: {show: false}, axisLabel: {show: false}, splitLine: {show: false} }],
+                yAxis: [{name: null, axisLine: {show: true}, axisTick: {show: false}, axisLabel: {show: false}, splitLine: {show: false} }],
+                legend: {show: false}, 
+                toolbox: {show: false},
+                plotOptions: {series: {animation: false, lineWidth: 1, shadow: false, states: {hover: {lineWidth: 1}}, marker: {radius: 1, states: {hover: {radius: 2}}}, fillOpacity: 0.25}}
+            }
+        }
+
         this.baseSeries = [];
 
         var label    = String(this.options.label).explode();
@@ -474,7 +503,8 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
         }
 
         // === X-axis (time) ===
-        var xAxis = $.extend(true, {
+        var xAxis = [];
+        xAxis [0] = $.extend(true, {
             type: "time",
             name: this.options.axis.explode()[0] || "",
             min: xMin,
@@ -571,12 +601,12 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
                 params.forEach(p => {
                     if (p.seriesType === "custom") {
                         var [time, min, max] = p.data;
-                        html += `${p.marker}${p.seriesName}: min <b>${min}</b>, max <b>${max} ${units[assign[i] || 0] || ""}</b><br/>`;
+                        html += `${p.marker}${p.seriesName}: min <b>${min}</b>, max <b>${max.transUnit(units[assign[i] || 0] || "")}</b><br/>`;
                         i++
                     } else if (p.seriesIndex == i) {
                         var yvalue = Array.isArray(p.data) ? p.data[1] : p.data;
                         if (ytype[i] != 'boolean')
-                            html += `${p.marker}${p.seriesName}: <b>${yvalue} ${units[assign[i] || 0] || ""}</b><br/>`;
+                            html += `${p.marker}${p.seriesName}: <b>${yvalue.transUnit(units[assign[i] || 0] || "")}</b><br/>`;
                         else 
                             html += `${p.marker}${p.seriesName}: <b>${yvalue == 0 ? ymin[i] || 0: ymax[i] || 1}</b><br/>`;
                         i++
@@ -656,7 +686,7 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
                 xMin = xMin - xMin % dayDuration + dayDuration + timezoneOffset * 60000;
                 xMax = xMin + dayDuration;
             }
-            newXaxis = { min: xMin, max: xMax };
+            newXaxis[0] = { min: xMin, max: xMax };
         }
 
         var modes = String(this.options.mode).explode();
@@ -712,7 +742,6 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
                 newSeriesArray[seriesIndex].data = response[i];
         
             this.chart.setOption( {xAxis : newXaxis, series: newSeriesArray } );
-            this.chart.resize();
         }
     },
 
@@ -740,7 +769,8 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
             }
                                 
         });
-    }
+    },
+
 });
 
 /** plot styles available in base.css but not yet used for echarts
@@ -777,7 +807,7 @@ $.widget("sv.plot_gauge_solid", $.sv.plot_echarts, {
         this._super();      
         this.element.css('width', '10%');
         this.element.css('height', '400px');
-        // get Styles from the body to retrieve plo color variables
+        // get Styles from the body to retrieve plot color variables
         var rules = window.getComputedStyle(document.body);
 
         var mode = this.options.mode.slice(6);
@@ -947,7 +977,6 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
 
         var min = Number(this.options.min) || 0;
         var max = Number(this.options.max);
-        var range = max - min; 
         var unit = this.options.unit || '';
         var mode = this.options.mode;
 
@@ -1658,13 +1687,13 @@ $.widget("sv.plot_xyplot", $.sv.plot_echarts, {
         var tooltip = {
             trigger: "axis",
             formatter: function(params) {
-                var html = params[0].axisValueLabel + "<br/>";
+                var html = params[0].axisValue.transUnit(units[0]) + "<br/>";
                 var i =0;
                 params.forEach(p => {
                     if (p.seriesIndex == i) {
                         var yvalue = Array.isArray(p.data) ? p.data[1] : p.data;
                         if (ytype[i] != 'boolean')
-                            html += `${p.marker}${p.seriesName}: <b>${yvalue} ${units[assign[i] || 0] || ""}</b><br/>`;
+                            html += `${p.marker}${p.seriesName}: <b>${yvalue.transUnit(units[assign[i] + 1 || 1])}</b><br/>`;
                         else 
                             html += `${p.marker}${p.seriesName}: <b>${yvalue == 0 ? ymin[i] || 0: ymax[i] || 1}</b><br/>`;
                         i++
