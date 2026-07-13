@@ -493,6 +493,8 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
                 min: (ymin[i] ? (isNaN(ymin[i]) ? 0 : Number(ymin[i])) : "dataMin"),
                 max: (ymax[i] ? (isNaN(ymax[i]) ? 1 : Number(ymax[i])) : null),
                 position: (opposite[i] && parseInt(opposite[i], 10) > 0) ? "right" : "left",
+                nameLocation: 'center',
+                nameRotate: (opposite[i] && parseInt(opposite[i], 10) > 0) ? -90 : 90
             }, this.getAxisStyles(ycolor[i]));
             
             axisObj.axisLine.show = true;
@@ -508,7 +510,8 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
             type: "time",
             name: this.options.axis.explode()[0] || "",
             min: xMin,
-            max: xMax
+            max: xMax,
+            nameLocation: 'center'
         }, this.getAxisStyles());
 
         // === Zoom  ===
@@ -1646,6 +1649,8 @@ $.widget("sv.plot_xyplot", $.sv.plot_echarts, {
                 min: (ymin[i] ? (isNaN(ymin[i]) ? 0 : Number(ymin[i])) : "dataMin"),
                 max: (ymax[i] ? (isNaN(ymax[i]) ? 1 : Number(ymax[i])) : null),
                 position: (opposite[i] && parseInt(opposite[i], 10) > 0) ? "right" : "left",
+                nameLocation: 'center',
+                nameRotate: (opposite[i] && parseInt(opposite[i], 10) > 0) ? -90 : 90
             }, this.getAxisStyles(ycolor[i]));
 
             axisObj.axisLine.show = true;
@@ -1660,7 +1665,8 @@ $.widget("sv.plot_xyplot", $.sv.plot_echarts, {
             type: "value",
             name: this.options.axis.explode()[0] || "",
             min: xmin,
-            max: xmax
+            max: xmax,
+            nameLocation: 'center'
         }, this.getAxisStyles());
 
 
@@ -1894,18 +1900,20 @@ $.widget("sv.plot_bargraph", $.sv.plot_echarts, {
             color = String(this.options.color).explode();
 
         var chartTitle = this.options.text;
-        var valueAxis = {
+        var valueAxis = $.extend(true, {
                 type: 'value',
                 show: true,
                 min: ymin,
                 max: ymax,
-                name: axisName
-        };
-        var categoryAxis = {
+                name: axisName,
+                nameLocation: 'center',
+                nameRotate: mode == 'vertical' ? 90 : 0
+        }, this.getAxisStyles());
+        var categoryAxis = $.extend(true, {
                 show: true,
                 type: 'category',
                 data: xlabels
-        };
+        }, this.getAxisStyles());
         var xAxis = mode == 'vertical' ? categoryAxis : valueAxis;
         var yAxis = mode == 'vertical' ? valueAxis : categoryAxis;
         
