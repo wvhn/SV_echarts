@@ -135,6 +135,54 @@ $.widget("sv.plot_echarts", $.sv.widget, {
             rb = fb + ratio * (tb - fb);
 
         return '#' + ((1 << 24) + (rr << 16) + (rg << 8) + rb | 0).toString(16).slice(1);
+    },
+    
+    matchTimerange: function(data, xMin, xMax, interpolate) {
+        var series = [];
+      
+        for (var i = 0; i < data.length - 1; i++) {
+            var p1 = data[i];
+            var p2 = data[i+1];
+            var dimension = p1.length;
+            // Push the point if it is within xAxis range
+            if (p1[0] >= xMin && p1[0] <= xMax) {
+                series.push(p1);
+            }
+            // Set data at xMin if data segment crosses it: interpolate or copy value
+            // if mode = minmax we need to set two values (min and max)
+            if ((p1[0] < xMin && p2[0] >= xMin)) {
+                var yInterpolated = p1[1] + (interpolate == true ? ((xMin - p1[0]) * (p2[1] - p1[1])) / (p2[0] - p1[0]) : 0);
+                // DEBUG: console.log('pushing value at xMin: ' + yInterpolated)
+                if (dimension != 3)
+                    series.push([xMin, yInterpolated]);
+                else {
+                    var yInterpolated_2 = p1[2] + (interpolate == true ? ((xMin - p1[0]) * (p2[2] - p1[2])) / (p2[0] - p1[0]) : 0);
+                    series.push([xMin, yInterpolated, yInterpolated_2]);
+                }
+            }
+                        // set data at xMax if data segment crosses it: interpolate or copy value
+            if ((p1[0] <= xMax && p2[0] > xMax)) {
+                var yInterpolated = p1[1] + (interpolate == true ? ((xMax - p1[0]) * (p2[1] - p1[1])) / (p2[0] - p1[0]) : 0);
+                // DEBUG: console.log('pushing value at xMax: ' + yInterpolated)
+                if (dimension != 3)
+                    series.push([xMax, yInterpolated]);
+                else {
+                    var yInterpolated_2 = p1[2] + (interpolate == true ? ((xMax - p1[0]) * (p2[2] - p1[2])) / (p2[0] - p1[0]) : 0);
+                    series.push([xMin, yInterpolated, yInterpolated_2]);
+                }
+            }
+        }
+                // Add the final point if it falls within bounds
+        var lastPoint = data[data.length - 1];
+        if (lastPoint[0] >= xMin && lastPoint[0] <= xMax) {
+            series.push(lastPoint);
+            if (lastPoint[0] < xMax){
+                lastPoint[0] = xMax;
+                    series.push(lastPoint);
+                // DEBUG: console.log('pushing last point: ', lastPoint)
+            }
+        }
+        return series;
     }
 
 }),
@@ -511,7 +559,12 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
             name: this.options.axis.explode()[0] || "",
             min: xMin,
             max: xMax,
-            nameLocation: 'center'
+            nameLocation: 'center',
+            axisLabel: {
+                formatter: {
+                    day: '{d}. {MMM}'
+                }
+            }
         }, this.getAxisStyles());
 
         // === Zoom  ===
@@ -696,6 +749,7 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
         var itemCount = response.length;
         var newSeriesArray = this.baseSeries;
 
+
         var seriesIndex = -1;
         for (var i = 0; i < itemCount; i++) {
             var mode = modes.shift();
@@ -739,11 +793,16 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
                         return [[ value[0], maxValue, minValue ]];
                 });
 
-                newSeriesArray[seriesIndex].data = values;
+                newSeriesArray[seriesIndex].data = this.matchTimerange(values, xMin, xMax, false);
             }
-            else if (response[i]) 
-                newSeriesArray[seriesIndex].data = response[i];
-        
+            else {
+                var interpolate = this.baseSeries[seriesIndex].type == 'line' && this.baseSeries[seriesIndex].step == false;
+                if (response[i]) 
+                    newSeriesArray[seriesIndex].data = this.matchTimerange(response[i], xMin, xMax, interpolate);
+                else if (newSeriesArray[seriesIndex].data.length != 0)
+                    newSeriesArray[seriesIndex].data = this.matchTimerange(newSeriesArray[seriesIndex].data, xMin, xMax, interpolate);
+            }
+
             this.chart.setOption( {xAxis : newXaxis, series: newSeriesArray } );
         }
     },
