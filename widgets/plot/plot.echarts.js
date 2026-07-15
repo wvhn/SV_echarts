@@ -143,42 +143,30 @@ $.widget("sv.plot_echarts", $.sv.widget, {
         for (var i = 0; i < data.length - 1; i++) {
             var p1 = data[i];
             var p2 = data[i+1];
-            var dimension = p1.length;
             // Push the point if it is within xAxis range
             if (p1[0] >= xMin && p1[0] <= xMax) {
                 series.push(p1);
             }
             // Set data at xMin if data segment crosses it: interpolate or copy value
-            // if mode = minmax we need to set two values (min and max)
             if ((p1[0] < xMin && p2[0] >= xMin)) {
                 var yInterpolated = p1[1] + (interpolate == true ? ((xMin - p1[0]) * (p2[1] - p1[1])) / (p2[0] - p1[0]) : 0);
                 // DEBUG: console.log('pushing value at xMin: ' + yInterpolated)
-                if (dimension != 3)
                     series.push([xMin, yInterpolated]);
-                else {
-                    var yInterpolated_2 = p1[2] + (interpolate == true ? ((xMin - p1[0]) * (p2[2] - p1[2])) / (p2[0] - p1[0]) : 0);
-                    series.push([xMin, yInterpolated, yInterpolated_2]);
-                }
             }
-                        // set data at xMax if data segment crosses it: interpolate or copy value
+            // set data at xMax if data segment crosses it: interpolate or copy value
             if ((p1[0] <= xMax && p2[0] > xMax)) {
                 var yInterpolated = p1[1] + (interpolate == true ? ((xMax - p1[0]) * (p2[1] - p1[1])) / (p2[0] - p1[0]) : 0);
                 // DEBUG: console.log('pushing value at xMax: ' + yInterpolated)
-                if (dimension != 3)
-                    series.push([xMax, yInterpolated]);
-                else {
-                    var yInterpolated_2 = p1[2] + (interpolate == true ? ((xMax - p1[0]) * (p2[2] - p1[2])) / (p2[0] - p1[0]) : 0);
-                    series.push([xMin, yInterpolated, yInterpolated_2]);
-                }
+                series.push([xMax, yInterpolated]);
             }
         }
-                // Add the final point if it falls within bounds
+        // Add the final point if it falls within bounds
         var lastPoint = data[data.length - 1];
         if (lastPoint[0] >= xMin && lastPoint[0] <= xMax) {
             series.push(lastPoint);
             if (lastPoint[0] < xMax){
                 lastPoint[0] = xMax;
-                    series.push(lastPoint);
+                series.push(lastPoint);
                 // DEBUG: console.log('pushing last point: ', lastPoint)
             }
         }
@@ -384,6 +372,10 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
 
     _create: function() {
         this._super();
+        // ignore chartOptions in test mode
+        // to do: remove 
+        if (location.href.indexOf('test=true') != -1)
+            this.options.chartOptions = {};
         
         // Prepare options for sparkline mode (will later be merged into the chart object and override the composition of the full plot)
         if (this.options.chartOptions && this.options.chartOptions.hasOwnProperty('mode') && this.options.chartOptions.mode == 'sparkline'){
@@ -715,7 +707,7 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
     _update: function(response) {
         // response is: [ [ [t1, y1], [t2, y2] ... ], [ [t1, y1], [t2, y2] ... ], ... ]
         // chart instance is available as this.chart. Alternative: echarts.getInstanceByDom(this.element[0])
-
+        // DEBUG: console.log('getting update', response)
         var actualDate = new Date();
         var timezoneOffset = actualDate.getTimezoneOffset();
 
@@ -793,14 +785,19 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
                         return [[ value[0], maxValue, minValue ]];
                 });
 
-                newSeriesArray[seriesIndex].data = this.matchTimerange(values, xMin, xMax, false);
+                newSeriesArray[seriesIndex].data = values;
             }
+            // normal series (not minmax)
+            // line graphs (including spline, area, stack and stair) must be fitted into the xAxis Range, bar graphs remain unchanged 
             else {
-                var interpolate = this.baseSeries[seriesIndex].type == 'line' && this.baseSeries[seriesIndex].step == false;
-                if (response[i]) 
-                    newSeriesArray[seriesIndex].data = this.matchTimerange(response[i], xMin, xMax, interpolate);
-                else if (newSeriesArray[seriesIndex].data.length != 0)
-                    newSeriesArray[seriesIndex].data = this.matchTimerange(newSeriesArray[seriesIndex].data, xMin, xMax, interpolate);
+                var fitSeries = this.baseSeries[seriesIndex].type == 'line';
+                var interpolate = this.baseSeries[seriesIndex].step == false;
+                // DEBUG: if (fitSeries && (response[i] || newSeriesArray[seriesIndex].data.length != 0 )) console.log('Fitting data to xAxis for item: ' + this.items[seriesIndex]);
+                if (response[i])
+                    newSeriesArray[seriesIndex].data = fitSeries == false ? response[i] : this.matchTimerange(response[i], xMin, xMax, interpolate);
+                else
+                    if (fitSeries == true && newSeriesArray[seriesIndex].data.length != 0)
+                        newSeriesArray[seriesIndex].data = this.matchTimerange(newSeriesArray[seriesIndex].data, xMin, xMax, interpolate);
             }
 
             this.chart.setOption( {xAxis : newXaxis, series: newSeriesArray } );
