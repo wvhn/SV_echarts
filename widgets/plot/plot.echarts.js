@@ -164,11 +164,7 @@ $.widget("sv.plot_echarts", $.sv.widget, {
         var lastPoint = data[data.length - 1];
         if (lastPoint[0] >= xMin && lastPoint[0] <= xMax) {
             series.push(lastPoint);
-            if (lastPoint[0] < xMax){
-                lastPoint[0] = xMax;
-                series.push(lastPoint);
-                // DEBUG: console.log('pushing last point: ', lastPoint)
-            }
+            // DEBUG: console.log('pushing last point: ', lastPoint)
         }
         return series;
     }
@@ -748,8 +744,8 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
             seriesIndex++;
 
             if(mode == 'minmaxavg') {
-                mode = 'minmax';
-                modes.unshift('avg');
+                mode = 'minmax'; // start with minmax
+                modes.unshift('_avg');  // and add _avg as next element, indicating it belongs to minmax
             }
             if(mode == 'minmax') {
 
@@ -790,7 +786,7 @@ $.widget("sv.plot_period", $.sv.plot_echarts, {
             // normal series (not minmax)
             // line graphs (including spline, area, stack and stair) must be fitted into the xAxis Range, bar graphs remain unchanged 
             else {
-                var fitSeries = this.baseSeries[seriesIndex].type == 'line';
+                var fitSeries = this.baseSeries[seriesIndex].type == 'line' && mode != '_avg';
                 var interpolate = this.baseSeries[seriesIndex].step == false;
                 // DEBUG: if (fitSeries && (response[i] || newSeriesArray[seriesIndex].data.length != 0 )) console.log('Fitting data to xAxis for item: ' + this.items[seriesIndex]);
                 if (response[i])
