@@ -86,7 +86,7 @@ $.widget("sv.plot_echarts", $.sv.widget, {
     },
 
     _changeColorScheme: function(){
-           var rules = window.getComputedStyle(document.body);
+        var rules = window.getComputedStyle(document.body);
         this.chart.setOption( {
             title: { textStyle: {color: rules.getPropertyValue('--plot-title')}, subtextStyle: {color: rules.getPropertyValue('--plot-subtitle')} },
             xAxis: this.getAxisStyles(),
@@ -1076,11 +1076,11 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
             }],
             global: false // default is false
         }
-
+        var rules = window.getComputedStyle(document.body);
 
         var option = {
             backgroundColor,
-            title: { text: this.options.label || '', left: 'center', top: 8 },
+            title: { text: this.options.label || '', left: 'center', top: 8, textStyle: {color: rules.getPropertyValue('--plot-title')} },
             tooltip: { show: !!this.options.unit, formatter: function (p) { return (p.seriesName ? p.seriesName + '<br/>' : '') + (p.value != null ? p.value + ' ' + (p.series && p.series.unit || '') : ''); } },
             series: []
         };
@@ -1102,14 +1102,15 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
                 axisLine: {
                     lineStyle: { width: 14, color: stops.length > 0 ? stops : [1, palette[0]] }
                 },
-                axisTick: { length: 10, lineStyle: { color: axisStyle && axisStyle.axis || '#999' } },
-                splitLine: { length: 14, lineStyle: { color: axisStyle && axisStyle.axis || '#999' } },
-                axisLabel: { color: axisStyle && axisStyle.label || '#333' },
+                axisTick: { length: 10, lineStyle: { color: axisStyle.axisTick.lineStyle.color || '#999' } },
+                splitLine: { length: 14, lineStyle: { color: axisStyle.splitLine.lineStyle.color || '#999' } },
+                axisLabel: { color: axisStyle.axisLabel.color || '#333' },
                 pointer: { width: 4, length: '70%' },
                 detail: { 
                     formatter: function(params) {return `${params.transUnit(unit)}`},
                     offsetCenter: [0, '20%'],
                     fontSize: 16,
+                    color: rules.getPropertyValue('--plot-title'),
                 },
                 progress: {
                     show: mode == 'scale' ? true : false,
@@ -1121,7 +1122,7 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
                         borderColor: 'none'
                     }
                 },
-                data: [ { value: 0, name: this.options.label || '' } ],
+                data: [ { value: 0, name: this.options.label || ''} ],
                 unit: unit
             });
 
@@ -1216,6 +1217,19 @@ $.widget("sv.plot_gauge_angular", $.sv.plot_echarts, {
                 series: [{ data: [{ value: rawValue }] }]
             });
         }
+    },
+
+    _changeColorScheme: function(){
+        var rules = window.getComputedStyle(document.body);
+        var axisStyle = this.getAxisStyles();
+        this.chart.setOption( {
+            title: { textStyle: {color: rules.getPropertyValue('--plot-title')}, subtextStyle: {color: rules.getPropertyValue('--plot-subtitle')} },
+            series: { 
+                axisTick: { length: 10, lineStyle: { color: axisStyle.axisTick.lineStyle.color || '#999' } },
+                splitLine: { length: 14, lineStyle: { color: axisStyle.splitLine.lineStyle.color || '#999' } },
+                axisLabel: { color: axisStyle.axisLabel.color || '#333' },
+                detail: { color: rules.getPropertyValue('--plot-title') }},
+        });
     },
 
 });
